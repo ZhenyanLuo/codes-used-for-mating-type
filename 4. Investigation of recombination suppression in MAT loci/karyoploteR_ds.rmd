@@ -1,0 +1,381 @@
+---
+title: "KaryoplotR_ds"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+.libPaths("C:/Program Files/R/R-4.3.1/library")
+library(cli)
+library(karyoploteR)
+library(tidyverse)
+library(GenomicRanges)
+library(regioneR)
+```
+
+```{r}
+#Input ds value
+species<-c("Pca203", "Pst134E", "Pt76", "Pgt210")
+for (i in species){
+    if(i == "Pt76"){
+    assign(eval(as.character(paste0(i,"_ds"))),read.csv(paste0("KaryoplotR/ds_value/", i , "_ds.df"), sep ="")%>%
+        select("Index","yn00_dS","yn00_dN")%>%separate(Index, into = c("tmp1", "tmp2","tmp3","tmp4"), sep = "_")%>%
+        mutate(Target=paste0(tmp1,"_",tmp2), Query=paste0(tmp3,"_",tmp4))%>%
+        select("Target", "Query","yn00_dS","yn00_dN"))
+    } else if (i == "Pst134E" | i == "Pca203") {
+    assign(eval(as.character(paste0(i,"_ds"))),read.csv(paste0("KaryoplotR/ds_value/", i , "_ds.df"), sep ="")%>%
+        select("Index","yn00_dS","yn00_dN")%>%separate(Index, into = c("tmp1", "tmp2","tmp3","tmp4"), sep = "_")%>%
+        mutate(Target=paste0(tmp3,"_",tmp4), Query=paste0(tmp1,"_",tmp2))%>%
+        select("Target", "Query","yn00_dS","yn00_dN"))    
+    } else {
+    assign(eval(as.character(paste0(i,"_ds"))),read.csv(paste0("KaryoplotR/ds_value/", i , "_ds.df"), sep ="")%>%
+        select("Index","yn00_dS","yn00_dN")%>%separate(Index, into = c("tmp1", "tmp2","tmp3","tmp4","tmp5","tmp6"), sep = "_")%>%
+        mutate(Target=paste0(tmp4,"_",tmp5,"_",tmp6), Query=paste0(tmp1,"_",tmp2,"_",tmp3))%>%
+        select("Target", "Query","yn00_dS","yn00_dN"))        
+    }
+    
+}
+```
+
+```{r}
+#Input gff file
+for (i in species){
+    assign(paste0(i,"_gene"),read.csv(paste0("KaryoplotR/ds_value/", i , ".gene.gff"), sep ="", header=FALSE)%>%
+    filter(V3=="gene")%>%mutate(V9 = gsub("ID=","",V9))%>%mutate(V9 = gsub(";","",V9))%>%mutate(V9 = gsub("Name=.*","",V9))%>%
+           filter(V1==paste0(i,"_chr4A")|V1==paste0(i,"_chr1A")|V1==paste0(i,"_chr9A"))%>%
+            select(V1, V4, V5, V9)%>%rename(chr=V1, start=V4, end=V5, gene=V9))
+}
+chr<-c("chr1A","chr4A","chr9A")
+for (i in species){
+    for (c in chr){
+        assign(paste0(i, "_gene_",c), eval(as.symbol(paste0(i, "_gene")))%>%filter(chr==paste0(i,"_",c)))
+    }
+}
+
+```
+
+
+```{r}
+#Set colour of genes
+for (i in species){
+    for (c in chr){
+        tmp0<-eval(as.symbol(paste0(i, "_gene_",c)))%>%mutate(start=as.numeric(start), end=as.numeric(end))
+        tmp_INT<-tmp0%>%mutate(start=as.numeric(start), end=as.numeric(end))%>%arrange(chr, start)%>%
+  mutate(Line = ifelse(row_number() == 1, "First", ifelse(row_number() == n (), "Last", "FALSE")))%>%
+  mutate(Inter_start = ifelse(Line=="First", 1,  lag(end) + 1))%>%
+    mutate(Inter_end = start-1)%>%
+    select("chr","Inter_start","Inter_end")%>%
+    mutate(name = "int", gieStain = "gneg")
+        colnames(tmp_INT)<-c("chr", "start", "end", "gene", "gieStain")
+        tmp0$gieStain <-"gpos50"
+        tmp0<-rbind(tmp0,tmp_INT)%>%filter(start<end)%>%arrange(chr, start)
+        assign(paste0(i,"_gene_",c,"0"), tmp0)
+    }
+}
+```
+
+```{r}
+HD_chr<-rbind(Pca203_gene_chr4A0, Pst134E_gene_chr4A0, Pt76_gene_chr4A0, Pgt210_gene_chr4A0)%>%
+        select(chr, start, end)%>% group_by(chr)%>%
+    summarize(chr=unique(chr), chr_start = 1, chr_end = max(end))%>%
+    as.data.frame%>%toGRanges
+PR_chr<-rbind(Pca203_gene_chr9A0, Pst134E_gene_chr9A0, Pt76_gene_chr9A0, Pgt210_gene_chr9A0)%>%
+        select(chr, start, end)%>% group_by(chr)%>%
+    summarize(chr=unique(chr), chr_start = 1, chr_end = max(end))%>%
+    as.data.frame%>%toGRanges
+STE31_chr<-rbind(Pca203_gene_chr1A0, Pst134E_gene_chr1A0, Pt76_gene_chr1A0, Pgt210_gene_chr1A0)%>%
+        select(chr, start, end)%>% group_by(chr)%>%
+    summarize(chr=unique(chr), chr_start = 1, chr_end = max(end))%>%
+    as.data.frame%>%toGRanges
+```
+
+```{r}
+HD_gene_chr<-rbind(Pca203_gene_chr4A0, Pst134E_gene_chr4A0, Pt76_gene_chr4A0, Pgt210_gene_chr4A0)%>%toGRanges
+PR_gene_chr<-rbind(Pca203_gene_chr9A0, Pst134E_gene_chr9A0, Pt76_gene_chr9A0, Pgt210_gene_chr9A0)%>%toGRanges
+STE31_gene_chr<-rbind(Pca203_gene_chr1A0, Pst134E_gene_chr1A0, Pt76_gene_chr1A0, Pgt210_gene_chr1A0)%>%toGRanges
+```
+
+```{r}
+#Load feature
+STE31_Gendensity<-read.csv(paste0("KaryoplotR/ds_value/chr1A.genedensity"), sep ="", header =FALSE)
+HD_Gendensity<-read.csv(paste0("KaryoplotR/ds_value/chr4A.genedensity"), sep ="", header =FALSE)
+PR_Gendensity<-read.csv(paste0("KaryoplotR/ds_value/chr9A.genedensity"), sep ="", header =FALSE)
+STE31_TEdensity<-read.csv(paste0("KaryoplotR/ds_value/chr1A.Tedensity"), sep ="", header =FALSE)
+HD_TEdensity<-read.csv(paste0("KaryoplotR/ds_value/chr4A.Tedensity"), sep ="", header =FALSE)
+PR_TEdensity<-read.csv(paste0("KaryoplotR/ds_value/chr9A.Tedensity"), sep ="", header =FALSE)
+
+```
+```{r}
+Pgt210_gene<-Pgt210_gene%>%mutate(gene=gsub("201_A1", "21A", gene))
+for (i in species){
+assign(paste0(i,"_ds0"), merge(eval(as.symbol(paste0(i,"_ds"))), eval(as.symbol(paste0(i,"_gene"))), by.x ='Target', by.y = 'gene')%>%
+       select(chr, yn00_dS, start, end)%>%filter(yn00_dS<=1))
+assign(paste0(i,"_ds1"), merge(eval(as.symbol(paste0(i,"_ds"))), eval(as.symbol(paste0(i,"_gene"))), by.x ='Target', by.y = 'gene')%>%
+       select(chr, yn00_dS, start, end)%>%filter(yn00_dS>1))
+}
+DS0<-rbind(Pgt210_ds0,Pt76_ds0,Pst134E_ds0,Pca203_ds0)
+DS1<-rbind(Pgt210_ds1,Pt76_ds1,Pst134E_ds1,Pca203_ds1)
+```
+
+```{r}
+HD_cen <- c("Pst134E_chr4A:3250000-3350000",
+                      "Pca203_chr4A:3575747-3705746",
+                     "Pgt210_chr4A:3060000-3340000",
+                    "Pt76_chr4A:5218178-5368177")
+PR_cen <- c("Pst134E_chr9A:3150000-3350000",
+                      "Pca203_chr9A:3193669-3273669",
+                     "Pgt210_chr9A:1930000-2160000",
+                    "Pt76_chr9A:3439084-3664083")
+STE31_cen <- c("Pst134E_chr1A:1850000-1950000",
+                      "Pca203_chr1A:2574112-2664111",
+                     "Pgt210_chr1A:2180000-2450000",
+                       "Pt76_chr1A:4278892-4378891")           
+HD_gene_list<-c("Pt76_019207", "Pt76_019208", "Pca203_021773", "Pca203_021774", 
+                "Pst134E_007516", "Pst134E_007517","Pgt_21A_12285", "Pgt_21A_12286")
+PR_gene_list<-c("Pgt_21A_17840","Pca203_001648","Pst134E_017715","Pt76_028748")
+STE31_gene_list<-c("Pgt_21A_973","Pca203_012718","Pst134E_000843","Pt76_012571")         
+```
+
+```{r}
+PR_chr_list<-c("Pca203_chr9A","Pgt210_chr9A","Pst134E_chr9A","Pt76_chr9A")
+for (i in PR_chr_list){
+  #  options(repr.plot.width=12, repr.plot.height=3)
+    pdf(paste0("KaryoplotR/ds_value/",i,".pdf"), width = 12, height = 3)
+    tmp_Genedensity<-PR_Gendensity%>%filter(V1==as.character(i))
+    tmp_TEdensity<-PR_TEdensity%>%filter(V1==as.character(i))
+    tmp_cytobands<-rbind(Pca203_gene_chr9A0, Pst134E_gene_chr9A0, Pt76_gene_chr9A0, Pgt210_gene_chr9A0)%>%
+        filter(chr==as.character(i))%>%toGRanges
+    tmp_cent<-PR_cen %>% map(~ if (grepl(i, .)) . else NULL)%>%discard(is.null)%>%as.character%>%toGRanges
+    tmp_genome<-rbind(Pca203_gene_chr9A0, Pst134E_gene_chr9A0, Pt76_gene_chr9A0, Pgt210_gene_chr9A0)%>%
+        select(chr, start, end)%>% group_by(chr)%>%filter(chr==as.character(i))%>%
+        summarize(chr=unique(chr), chr_start = 1, chr_end = max(end))%>%
+        as.data.frame
+    PR_gene<-rbind(Pca203_gene, Pt76_gene, Pgt210_gene, Pst134E_gene)%>%
+            filter(gene %in% PR_gene_list)%>%filter(chr==as.character(i))%>%mutate(start = as.numeric(start))%>%mutate(end = as.numeric(end))
+    tmp_genome_end<-as.numeric(tmp_genome$chr_end)
+    tmp_genome<-toGRanges(tmp_genome)
+    PR_whole<-plotKaryotype(plot.type=2, genome=tmp_genome)
+    kpPlotRegions(PR_whole, data=tmp_cent, r0=-1.5, r1=1, col = rgb(0, 0, 1, 0.3))
+    kpAddBaseNumbers(PR_whole, tick.dist = 1000000, tick.len = 25, tick.col="red", cex=1,
+                 minor.tick.dist = 100000, minor.tick.len = 15, minor.tick.col = "gray")
+#    kpDataBackground(PR_whole, data.panel = 2, col=rgb(0.219, 0.216, 0.206, 0.1),r0 =0.6, r1=0.9)
+#    kpDataBackground(PR_whole, data.panel = 2, col=rgb(0.219, 0.216, 0.206, 0.1),r0 =0.2, r1=0.5)
+    kpLines(PR_whole, chr=as.character(i), x=(tmp_Genedensity$V2+tmp_Genedensity$V3)/2, y=(1-tmp_Genedensity$V7), data.panel = 2, r0 =0.7, r1=1, col="red")    
+    kpLines(PR_whole, chr=as.character(i), x=(tmp_TEdensity$V2+tmp_TEdensity$V3)/2, y=(1-tmp_TEdensity$V7), data.panel = 2, r0 =0.2, r1=0.5)                    
+    tmp2<-DS0%>%filter(chr==as.character(i))%>%mutate(start=as.numeric(start), end=as.numeric(end))
+    kpPoints(PR_whole, chr=as.character(i), x=(tmp2$start+tmp2$end)/2, y=tmp2$yn00_dS, data.panel = 1, r0=0.1, r1=0.6, cex=0.6)
+    tmp3<-DS1%>%filter(chr==as.character(i))%>%mutate(start=as.numeric(start), end=as.numeric(end))
+    kpPoints(PR_whole, chr=as.character(i), x=(tmp3$start+tmp3$end)/2, y=(tmp3$yn00_dS-1)/10, data.panel = 1, r0=0.6, r1=1, cex=0.6)
+#    kpAddLabels(PR_whole, labels="Gene", data.panel = 2,r0 =0.6, r1=0.9)
+#    kpAddLabels(PR_whole, labels="TE", data.panel = 2, r0 =0.2, r1=0.5)
+    kpRect(PR_whole, chr=i, x0=1, x1=tmp_genome_end, y0=0.1, y1=0.6, col="NA", data.panel=1, border="red",lty=2)
+    kpRect(PR_whole, chr=i, x0=1, x1=tmp_genome_end, y0=0.1, y1=1, col="NA", data.panel=1, border="black")                         
+    kpAxis(PR_whole, data.panel=1, side = 1, ymin=0, ymax=1,r0=0.1, r1=0.6)
+    kpAxis(PR_whole, data.panel=1, side = 1, ymin=0, ymax=1,r0=0.6, r1=1,tick.pos = c(0, 0.5, 1), labels = c(" ", 5, 10))
+    kpRect(PR_whole, chr=i, x0=1, x1=tmp_genome_end, y0=0.7, y1=1, col="NA", data.panel=2, border="black")
+    kpRect(PR_whole, chr=i, x0=1, x1=tmp_genome_end, y0=0.2, y1=0.5, col="NA", data.panel=2, border="black")     
+    kpAxis(PR_whole, data.panel=2, side = 1, numticks = 3, tick.pos = c(0,  1),labels = c(1,0), r0 =0.7, r1=1)
+    kpAxis(PR_whole, data.panel=2, side = 1, numticks = 3, tick.pos = c(0,1),labels = c(1,0), r0 =0.2, r1=0.5)
+    tmp<-PR_gene[1,]%>%toGRanges
+    PR_zoom<-rbind(Pca203_gene, Pt76_gene, Pgt210_gene, Pst134E_gene)%>%
+            filter(gene %in% PR_gene_list)%>%group_by(chr)%>%mutate(start=as.numeric(start), end=as.numeric(start))%>%
+    summarize(chr=unique(chr), start = min(start-200000), end = max(end+200000))%>%filter(chr==as.character(i))%>%
+                                                                                          as.data.frame%>%toGRanges
+    kpPlotRegions(PR_whole, data=PR_zoom, r0=-1.5, r1=1, col = rgb(1, 0, 0, 0.1))
+    kpPlotRegions(PR_whole, data=tmp, r0=-1.5, r1=1, col = rgb(1, 0, 0, 0.3))
+    dev.off()
+#-----------------------------------------------------------------------------------------------------------------------    
+    pdf(paste0("KaryoplotR/ds_value/",i,"_zoom.pdf"), width = 12, height = 3)
+    PR_start<-rbind(Pca203_gene, Pt76_gene, Pgt210_gene, Pst134E_gene)%>%
+            filter(gene %in% PR_gene_list)%>%group_by(chr)%>%mutate(start=as.numeric(start), end=as.numeric(start))%>%
+    summarize(chr=unique(chr), start = min(start-200000))%>%filter(chr==as.character(i))
+    PR_start<-PR_start$start%>%as.numeric
+    PR_end<-rbind(Pca203_gene, Pt76_gene, Pgt210_gene, Pst134E_gene)%>%
+            filter(gene %in% PR_gene_list)%>%group_by(chr)%>%mutate(start=as.numeric(start), end=as.numeric(start))%>%
+    summarize(chr=unique(chr), end = max(end+200000))%>%filter(chr==as.character(i))
+    PR_end<-PR_end$end%>%as.numeric
+#    assign(paste0(i, "_zoom"), plotKaryotype(chromosomes=i, zoom=PR_zoom, plot.type=2, genome=PR_chr , cytobands=PR_gene_chr))
+    tmp_kp<- plotKaryotype(chromosomes=i, genome = tmp_genome, zoom=PR_zoom, plot.type=2, cytobands=tmp_cytobands)
+    kpAddBaseNumbers(tmp_kp, tick.dist = 20000, tick.len = 25, tick.col="red", cex=1,
+                 minor.tick.dist = 10000, minor.tick.len = 15, minor.tick.col = "gray")
+    kpPlotRegions(tmp_kp, data=PR_cen, r0=-1.4, r1=1, col = rgb(0, 0, 1, 0.3))
+    #Back ground of ds value 
+#    kpDataBackground(tmp_kp, data.panel = 1, col=rgb(0, 1, 1, 0.1),r0=0, r1=0.6)
+    kpRect(tmp_kp, chr=i, x0=as.numeric(PR_start), x1=as.numeric(PR_end), y0=0.6, y1=1, col="NA", data.panel=1, border="red",lty=2)
+    kpRect(tmp_kp, chr=i, x0=as.numeric(PR_start), x1=as.numeric(PR_end), y0=0.1, y1=1, col="NA", data.panel=1, border="black")
+    tmp2<-DS0%>%filter(chr==as.character(i))%>%mutate(start=as.numeric(start), end=as.numeric(end), yn00_dS=as.numeric(yn00_dS))
+    kpPoints(tmp_kp, chr=as.character(i), x=(tmp2$start+tmp2$end)/2, y=tmp2$yn00_dS, data.panel = 1, r0=0.1, r1=0.6, cex=1)
+    tmp3<-DS1%>%filter(chr==as.character(i))%>%mutate(start=as.numeric(start), end=as.numeric(end))
+    kpPoints(tmp_kp, chr=as.character(i), x=(tmp3$start+tmp3$end)/2, y=(tmp3$yn00_dS-1)/10, data.panel = 1, r0=0.6, r1=1, cex=1)
+    #kpAxis(tmp_kp, data.panel=1, side = 1, numticks = 5, ymin=0, ymax=1,r0=0.1, r1=0.6)
+    kpAxis(tmp_kp, data.panel=1, side = 1, ymin=0, ymax=1,r0=0.1, r1=0.6)
+    kpAxis(tmp_kp, data.panel=1, side = 1, ymin=0, ymax=1,r0=0.6, r1=1,tick.pos = c(0, 0.5, 1), labels = c(" ", 5, 10))
+    kpPlotMarkers(tmp_kp, chr=i, x=(PR_gene$start+PR_gene$end)/2 , labels=c("STE3.2-3"), text.orientation = "horizontal", marker.parts = c(4, 0.9, 1), max.iter = 1000)
+#    kpAxis(tmp_kp, data.panel=2, side = 1, numticks = 2, ymin=0, ymax=1, r0 =0.6, r1=0.9)
+#    kpAxis(tmp_kp, data.panel=2, side = 1, numticks = 2, ymin=0, ymax=1, r0 =0.2, r1=0.5)
+    dev.off()
+}
+```
+
+```{r}
+HD_chr_list<-c("Pca203_chr4A","Pgt210_chr4A","Pst134E_chr4A","Pt76_chr4A")
+for (i in HD_chr_list){
+    pdf(paste0("KaryoplotR/ds_value/",i,".pdf"), width = 12, height = 3)
+    tmp_Genedensity<-HD_Gendensity%>%filter(V1==as.character(i))
+    tmp_TEdensity<-HD_TEdensity%>%filter(V1==as.character(i))
+    tmp_cytobands<-rbind(Pca203_gene_chr4A0, Pst134E_gene_chr4A0, Pt76_gene_chr4A0, Pgt210_gene_chr4A0)%>%
+        filter(chr==as.character(i))%>%toGRanges
+    tmp_cent<-HD_cen %>% map(~ if (grepl(i, .)) . else NULL)%>%discard(is.null)%>%as.character%>%toGRanges
+    tmp_genome<-rbind(Pca203_gene_chr4A0, Pst134E_gene_chr4A0, Pt76_gene_chr4A0, Pgt210_gene_chr4A0)%>%
+        select(chr, start, end)%>% group_by(chr)%>%filter(chr==as.character(i))%>%
+        summarize(chr=unique(chr), chr_start = 1, chr_end = max(end))%>%
+        as.data.frame
+    
+    HD_gene<-rbind(Pca203_gene, Pt76_gene, Pgt210_gene, Pst134E_gene)%>%
+            filter(gene %in% HD_gene_list)%>%filter(chr==as.character(i))%>%mutate(start = as.numeric(start))%>%mutate(end = as.numeric(end))
+    tmp_genome_end<-as.numeric(tmp_genome$chr_end)
+    tmp_genome<-toGRanges(tmp_genome)
+    HD_whole<-plotKaryotype(plot.type=2, genome=tmp_genome)#, cytobands=tmp_cytobands)
+    kpPlotRegions(HD_whole, data=tmp_cent, r0=-1.5, r1=1, col = rgb(0, 0, 1, 0.3))
+    kpAddBaseNumbers(HD_whole, tick.dist = 1000000, tick.len = 25, tick.col="red", cex=1,
+                 minor.tick.dist = 100000, minor.tick.len = 15, minor.tick.col = "gray")
+#    kpDataBackground(HD_whole, data.panel = 2, col=rgb(0.219, 0.216, 0.206, 0.1),r0 =0.6, r1=0.9)
+#    kpDataBackground(HD_whole, data.panel = 2, col=rgb(0.219, 0.216, 0.206, 0.1),r0 =0.2, r1=0.5)
+    kpLines(HD_whole, chr=as.character(i), x=(tmp_Genedensity$V2+tmp_Genedensity$V3)/2, y=(1-tmp_Genedensity$V7), data.panel = 2, r0 =0.7, r1=1, col="red")    
+    kpLines(HD_whole, chr=as.character(i), x=(tmp_TEdensity$V2+tmp_TEdensity$V3)/2, y=(1-tmp_TEdensity$V7), data.panel = 2, r0 =0.2, r1=0.5)                    
+    tmp2<-DS0%>%filter(chr==as.character(i))%>%mutate(start=as.numeric(start), end=as.numeric(end))
+    kpPoints(HD_whole, chr=as.character(i), x=(tmp2$start+tmp2$end)/2, y=tmp2$yn00_dS, data.panel = 1, r0=0.1, r1=0.6, cex=0.6)
+    tmp3<-DS1%>%filter(chr==as.character(i))%>%mutate(start=as.numeric(start), end=as.numeric(end))
+    kpPoints(HD_whole, chr=as.character(i), x=(tmp3$start+tmp3$end)/2, y=(tmp3$yn00_dS-1)/10, data.panel = 1, r0=0.6, r1=1, cex=0.6)
+#    kpAddLabels(HD_whole, labels="Gene", data.panel = 2,r0 =0.6, r1=0.9)
+#    kpAddLabels(HD_whole, labels="TE", data.panel = 2, r0 =0.2, r1=0.5)
+    kpRect(HD_whole, chr=i, x0=1, x1=tmp_genome_end, y0=0.1, y1=0.6, col="NA", data.panel=1, border="red",lty=2)
+    kpRect(HD_whole, chr=i, x0=1, x1=tmp_genome_end, y0=0.1, y1=1, col="NA", data.panel=1, border="black")                         
+    kpAxis(HD_whole, data.panel=1, side = 1, ymin=0, ymax=1,r0=0.1, r1=0.6)
+    kpAxis(HD_whole, data.panel=1, side = 1, ymin=0, ymax=1,r0=0.6, r1=1,tick.pos = c(0, 0.5, 1), labels = c(" ", 5, 10))
+    kpRect(HD_whole, chr=i, x0=1, x1=tmp_genome_end, y0=0.7, y1=1, col="NA", data.panel=2, border="black")
+    kpRect(HD_whole, chr=i, x0=1, x1=tmp_genome_end, y0=0.2, y1=0.5, col="NA", data.panel=2, border="black")     
+    kpAxis(HD_whole, data.panel=2, side = 1, numticks = 3, tick.pos = c(0,  1),labels = c(1,0), r0 =0.7, r1=1)
+    kpAxis(HD_whole, data.panel=2, side = 1, numticks = 3, tick.pos = c(0,1),labels = c(1,0), r0 =0.2, r1=0.5)
+    tmp<-HD_gene[1,]%>%toGRanges
+    HD_zoom<-rbind(Pca203_gene, Pt76_gene, Pgt210_gene, Pst134E_gene)%>%
+            filter(gene %in% HD_gene_list)%>%group_by(chr)%>%mutate(start=as.numeric(start), end=as.numeric(start))%>%
+    summarize(chr=unique(chr), start = min(start-200000), end = max(end+200000))%>%filter(chr==as.character(i))%>%
+                                                                                          as.data.frame%>%toGRanges
+    kpPlotRegions(HD_whole, data=HD_zoom, r0=-1.5, r1=1, col = rgb(1, 0, 0, 0.1))
+    kpPlotRegions(HD_whole, data=tmp, r0=-1.5, r1=1, col = rgb(1, 0, 0, 0.3))
+    dev.off()
+#-----------------------------------------------------------------------------------------------------------------------    
+    pdf(paste0("KaryoplotR/ds_value/",i,"_zoom.pdf"), width = 12, height = 3)
+    HD_start<-rbind(Pca203_gene, Pt76_gene, Pgt210_gene, Pst134E_gene)%>%
+            filter(gene %in% HD_gene_list)%>%group_by(chr)%>%mutate(start=as.numeric(start), end=as.numeric(start))%>%
+    summarize(chr=unique(chr), start = min(start-200000))%>%filter(chr==as.character(i))
+    HD_start<-HD_start$start%>%as.numeric
+    HD_end<-rbind(Pca203_gene, Pt76_gene, Pgt210_gene, Pst134E_gene)%>%
+            filter(gene %in% HD_gene_list)%>%group_by(chr)%>%mutate(start=as.numeric(start), end=as.numeric(start))%>%
+    summarize(chr=unique(chr), end = max(end+200000))%>%filter(chr==as.character(i))
+    HD_end<-HD_end$end%>%as.numeric
+#    assign(paste0(i, "_zoom"), plotKaryotype(chromosomes=i, zoom=HD_zoom, plot.type=2, genome=HD_chr , cytobands=HD_gene_chr))
+    tmp_kp<- plotKaryotype(chromosomes=i, genome = tmp_genome, zoom=HD_zoom, plot.type=2, cytobands=tmp_cytobands)
+    kpAddBaseNumbers(tmp_kp, tick.dist = 20000, tick.len = 25, tick.col="red", cex=1,
+                 minor.tick.dist = 10000, minor.tick.len = 15, minor.tick.col = "gray")
+    kpPlotRegions(tmp_kp, data=HD_cen, r0=-1.4, r1=1, col = rgb(0, 0, 1, 0.3))
+    #Back ground of ds value 
+#    kpDataBackground(tmp_kp, data.panel = 1, col=rgb(0, 1, 1, 0.1),r0=0, r1=0.6)
+    kpRect(tmp_kp, chr=i, x0=as.numeric(HD_start), x1=as.numeric(HD_end), y0=0.6, y1=1, col="NA", data.panel=1, border="red",lty=2)
+    kpRect(tmp_kp, chr=i, x0=as.numeric(HD_start), x1=as.numeric(HD_end), y0=0.1, y1=1, col="NA", data.panel=1, border="black")
+    tmp2<-DS0%>%filter(chr==as.character(i))%>%mutate(start=as.numeric(start), end=as.numeric(end), yn00_dS=as.numeric(yn00_dS))
+    kpPoints(tmp_kp, chr=as.character(i), x=(tmp2$start+tmp2$end)/2, y=tmp2$yn00_dS, data.panel = 1, r0=0.1, r1=0.6, cex=1)
+    tmp3<-DS1%>%filter(chr==as.character(i))%>%mutate(start=as.numeric(start), end=as.numeric(end))
+    kpPoints(tmp_kp, chr=as.character(i), x=(tmp3$start+tmp3$end)/2, y=(tmp3$yn00_dS-1)/10, data.panel = 1, r0=0.6, r1=1, cex=1)
+    #kpAxis(tmp_kp, data.panel=1, side = 1, numticks = 5, ymin=0, ymax=1,r0=0.1, r1=0.6)
+    kpAxis(tmp_kp, data.panel=1, side = 1, ymin=0, ymax=1,r0=0.1, r1=0.6)
+    kpAxis(tmp_kp, data.panel=1, side = 1, ymin=0, ymax=1,r0=0.6, r1=1,tick.pos = c(0, 0.5, 1), labels = c(" ", 5, 10))
+    kpPlotMarkers(tmp_kp, chr=i, x=(HD_gene$start+HD_gene$end)/2 , labels=c("bW1-HD1", "bE1-HD2"), text.orientation = "horizontal", marker.parts = c(4, 0.9, 1), max.iter = 1000)
+#    kpAxis(tmp_kp, data.panel=2, side = 1, numticks = 2, ymin=0, ymax=1, r0 =0.6, r1=0.9)
+#    kpAxis(tmp_kp, data.panel=2, side = 1, numticks = 2, ymin=0, ymax=1, r0 =0.2, r1=0.5)
+    dev.off()
+}
+```
+
+
+```{r}
+STE31_chr_list<-c("Pca203_chr1A","Pgt210_chr1A","Pst134E_chr1A","Pt76_chr1A")
+for (i in STE31_chr_list){
+    pdf(paste0("KaryoplotR/ds_value/",i,".pdf"), width = 12, height = 3)
+    tmp_Genedensity<-STE31_Gendensity%>%filter(V1==as.character(i))
+    tmp_TEdensity<-STE31_TEdensity%>%filter(V1==as.character(i))
+    tmp_cytobands<-rbind(Pca203_gene_chr1A0, Pst134E_gene_chr1A0, Pt76_gene_chr1A0, Pgt210_gene_chr1A0)%>%
+        filter(chr==as.character(i))%>%toGRanges
+    tmp_cent<-STE31_cen %>% map(~ if (grepl(i, .)) . else NULL)%>%discard(is.null)%>%as.character%>%toGRanges
+    tmp_genome<-rbind(Pca203_gene_chr1A0, Pst134E_gene_chr1A0, Pt76_gene_chr1A0, Pgt210_gene_chr1A0)%>%
+        select(chr, start, end)%>% group_by(chr)%>%filter(chr==as.character(i))%>%
+        summarize(chr=unique(chr), chr_start = 1, chr_end = max(end))%>%
+        as.data.frame
+    
+    STE31_gene<-rbind(Pca203_gene, Pt76_gene, Pgt210_gene, Pst134E_gene)%>%
+            filter(gene %in% STE31_gene_list)%>%filter(chr==as.character(i))%>%mutate(start = as.numeric(start))%>%mutate(end = as.numeric(end))
+    tmp_genome_end<-as.numeric(tmp_genome$chr_end)
+    tmp_genome<-toGRanges(tmp_genome)
+    STE31_whole<-plotKaryotype(plot.type=2, genome=tmp_genome)#, cytobands=tmp_cytobands)
+    kpPlotRegions(STE31_whole, data=tmp_cent, r0=-1.5, r1=1, col = rgb(0, 0, 1, 0.3))
+    kpAddBaseNumbers(STE31_whole, tick.dist = 1000000, tick.len = 25, tick.col="red", cex=1,
+                 minor.tick.dist = 100000, minor.tick.len = 15, minor.tick.col = "gray")
+#    kpDataBackground(STE31_whole, data.panel = 2, col=rgb(0.219, 0.216, 0.206, 0.1),r0 =0.6, r1=0.9)
+#    kpDataBackground(STE31_whole, data.panel = 2, col=rgb(0.219, 0.216, 0.206, 0.1),r0 =0.2, r1=0.5)
+    kpLines(STE31_whole, chr=as.character(i), x=(tmp_Genedensity$V2+tmp_Genedensity$V3)/2, y=(1-tmp_Genedensity$V7), data.panel = 2, r0 =0.7, r1=1, col="red")    
+    kpLines(STE31_whole, chr=as.character(i), x=(tmp_TEdensity$V2+tmp_TEdensity$V3)/2, y=(1-tmp_TEdensity$V7), data.panel = 2, r0 =0.2, r1=0.5)                    
+    tmp2<-DS0%>%filter(chr==as.character(i))%>%mutate(start=as.numeric(start), end=as.numeric(end))
+    kpPoints(STE31_whole, chr=as.character(i), x=(tmp2$start+tmp2$end)/2, y=tmp2$yn00_dS, data.panel = 1, r0=0.1, r1=0.6, cex=0.6)
+    tmp3<-DS1%>%filter(chr==as.character(i))%>%mutate(start=as.numeric(start), end=as.numeric(end))
+    kpPoints(STE31_whole, chr=as.character(i), x=(tmp3$start+tmp3$end)/2, y=(tmp3$yn00_dS-1)/10, data.panel = 1, r0=0.6, r1=1, cex=0.6)
+#    kpAddLabels(STE31_whole, labels="Gene", data.panel = 2,r0 =0.6, r1=0.9)
+#    kpAddLabels(STE31_whole, labels="TE", data.panel = 2, r0 =0.2, r1=0.5)
+    kpRect(STE31_whole, chr=i, x0=1, x1=tmp_genome_end, y0=0.1, y1=0.6, col="NA", data.panel=1, border="red",lty=2)
+    kpRect(STE31_whole, chr=i, x0=1, x1=tmp_genome_end, y0=0.1, y1=1, col="NA", data.panel=1, border="black")                         
+    kpAxis(STE31_whole, data.panel=1, side = 1, ymin=0, ymax=1,r0=0.1, r1=0.6)
+    kpAxis(STE31_whole, data.panel=1, side = 1, ymin=0, ymax=1,r0=0.6, r1=1,tick.pos = c(0, 0.5, 1), labels = c(" ", 5, 10))
+    kpRect(STE31_whole, chr=i, x0=1, x1=tmp_genome_end, y0=0.7, y1=1, col="NA", data.panel=2, border="black")
+    kpRect(STE31_whole, chr=i, x0=1, x1=tmp_genome_end, y0=0.2, y1=0.5, col="NA", data.panel=2, border="black")     
+    kpAxis(STE31_whole, data.panel=2, side = 1, numticks = 3, tick.pos = c(0,  1),labels = c(1,0), r0 =0.7, r1=1)
+    kpAxis(STE31_whole, data.panel=2, side = 1, numticks = 3, tick.pos = c(0,1),labels = c(1,0), r0 =0.2, r1=0.5)
+    tmp<-STE31_gene[1,]%>%toGRanges
+    STE31_zoom<-rbind(Pca203_gene, Pt76_gene, Pgt210_gene, Pst134E_gene)%>%
+            filter(gene %in% STE31_gene_list)%>%group_by(chr)%>%mutate(start=as.numeric(start), end=as.numeric(start))%>%
+    summarize(chr=unique(chr), start = min(start-200000), end = max(end+200000))%>%filter(chr==as.character(i))%>%
+                                                                                          as.data.frame%>%toGRanges
+    kpPlotRegions(STE31_whole, data=STE31_zoom, r0=-1.5, r1=1, col = rgb(1, 0, 0, 0.1))
+    kpPlotRegions(STE31_whole, data=tmp, r0=-1.5, r1=1, col = rgb(1, 0, 0, 0.3))
+    dev.off()
+#-----------------------------------------------------------------------------------------------------------------------    
+    pdf(paste0("KaryoplotR/ds_value/",i,"_zoom.pdf"), width = 12, height = 3)
+    STE31_start<-rbind(Pca203_gene, Pt76_gene, Pgt210_gene, Pst134E_gene)%>%
+            filter(gene %in% STE31_gene_list)%>%group_by(chr)%>%mutate(start=as.numeric(start), end=as.numeric(start))%>%
+    summarize(chr=unique(chr), start = min(start-200000))%>%filter(chr==as.character(i))
+    STE31_start<-STE31_start$start%>%as.numeric
+    STE31_end<-rbind(Pca203_gene, Pt76_gene, Pgt210_gene, Pst134E_gene)%>%
+            filter(gene %in% STE31_gene_list)%>%group_by(chr)%>%mutate(start=as.numeric(start), end=as.numeric(start))%>%
+    summarize(chr=unique(chr), end = max(end+200000))%>%filter(chr==as.character(i))
+    STE31_end<-STE31_end$end%>%as.numeric
+#    assign(paste0(i, "_zoom"), plotKaryotype(chromosomes=i, zoom=STE31_zoom, plot.type=2, genome=STE31_chr , cytobands=STE31_gene_chr))
+    tmp_kp<- plotKaryotype(chromosomes=i, genome = tmp_genome, zoom=STE31_zoom, plot.type=2, cytobands=tmp_cytobands)
+    kpAddBaseNumbers(tmp_kp, tick.dist = 20000, tick.len = 25, tick.col="red", cex=1,
+                 minor.tick.dist = 10000, minor.tick.len = 15, minor.tick.col = "gray")
+    kpPlotRegions(tmp_kp, data=STE31_cen, r0=-1.4, r1=1, col = rgb(0, 0, 1, 0.3))
+    #Back ground of ds value 
+#    kpDataBackground(tmp_kp, data.panel = 1, col=rgb(0, 1, 1, 0.1),r0=0, r1=0.6)
+    kpRect(tmp_kp, chr=i, x0=as.numeric(STE31_start), x1=as.numeric(STE31_end), y0=0.6, y1=1, col="NA", data.panel=1, border="red",lty=2)
+    kpRect(tmp_kp, chr=i, x0=as.numeric(STE31_start), x1=as.numeric(STE31_end), y0=0.1, y1=1, col="NA", data.panel=1, border="black")
+    tmp2<-DS0%>%filter(chr==as.character(i))%>%mutate(start=as.numeric(start), end=as.numeric(end), yn00_dS=as.numeric(yn00_dS))
+    kpPoints(tmp_kp, chr=as.character(i), x=(tmp2$start+tmp2$end)/2, y=tmp2$yn00_dS, data.panel = 1, r0=0.1, r1=0.6, cex=1)
+    tmp3<-DS1%>%filter(chr==as.character(i))%>%mutate(start=as.numeric(start), end=as.numeric(end))
+    kpPoints(tmp_kp, chr=as.character(i), x=(tmp3$start+tmp3$end)/2, y=(tmp3$yn00_dS-1)/10, data.panel = 1, r0=0.6, r1=1, cex=1)
+    #kpAxis(tmp_kp, data.panel=1, side = 1, numticks = 5, ymin=0, ymax=1,r0=0.1, r1=0.6)
+    kpAxis(tmp_kp, data.panel=1, side = 1, ymin=0, ymax=1,r0=0.1, r1=0.6)
+    kpAxis(tmp_kp, data.panel=1, side = 1, ymin=0, ymax=1,r0=0.6, r1=1,tick.pos = c(0, 0.5, 1), labels = c(" ", 5, 10))
+    kpPlotMarkers(tmp_kp, chr=i, x=(STE31_gene$start+STE31_gene$end)/2 , labels=c("STE3.2-1"), text.orientation = "horizontal", marker.parts = c(4, 0.9, 1), max.iter = 1000)
+#    kpAxis(tmp_kp, data.panel=2, side = 1, numticks = 2, ymin=0, ymax=1, r0 =0.6, r1=0.9)
+#    kpAxis(tmp_kp, data.panel=2, side = 1, numticks = 2, ymin=0, ymax=1, r0 =0.2, r1=0.5)
+    dev.off()
+}
+
+```

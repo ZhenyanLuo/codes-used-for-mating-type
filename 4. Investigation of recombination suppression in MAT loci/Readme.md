@@ -1,0 +1,3 @@
+This subfolder contains scripts used for generating main Fig3 and Fig5, and other supporting information related to ds value calculation.
+
+Repeat_annotation folder contains setting used for REPET, and dN_dS_*_ipynb contain how the dS value of gene pairs were calculated, Distribution_ds.ipynb shows how distribution of dS value on different chromosome generated. For KaryoplotR, the TE track and gene track were calculate with Repet_cov.sh and Gene_cov.sh respectively. Final output was visualize via karyoploteR_ds.rmd 
